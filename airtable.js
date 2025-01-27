@@ -4,8 +4,8 @@ const { EmbedBuilder } = require('discord.js');
 
 const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-async function addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden) {
-    console.log('Adding data to Airtable:', { boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover });
+async function addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden, categorieArray, thema) {
+    console.log('Adding data to Airtable:', { boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, categorieArray, thema });
 
     try {
         if (status === 'Beschikbaar' && uitgeleendAan) {
@@ -28,6 +28,9 @@ async function addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, 
         if (frontCover) omslag.push({ url: frontCover });
         if (backCover) omslag.push({ url: backCover });
 
+        // Ensure categorieArray is an array, even if both fields are empty
+        const combinedCategories = Array.isArray(categorieArray) ? categorieArray : [];
+
         await base('verbondsbibliotheek').create({
             'Boek': boek,
             'Auteur': auteur,
@@ -37,7 +40,9 @@ async function addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, 
             'Beschrijving': beschrijving,
             'Taal': taal,
             'Omslag': omslag,
-            'Aantal bladzijden': aantalBladzijden
+            'Aantal bladzijden': aantalBladzijden,
+            'Categorie': combinedCategories,  // Storing both categories in the same field
+            'Thema': thema
         });
         return `'${boek}' is succesvol toegevoegd aan de bibliotheek!`;
     } catch (error) {
@@ -53,7 +58,8 @@ async function fetchLibraryDataCompact() {
     try {
         const records = await base('verbondsbibliotheek').select().all();
 
-        let bookList = records.map(record => {
+        // Create book information list
+        const bookList = records.map(record => {
             const fields = record.fields;
             const boek = fields.Boek || 'Onbekend Boek';
             const auteur = fields.Auteur || 'Onbekende Auteur';
@@ -62,35 +68,42 @@ async function fetchLibraryDataCompact() {
             return `**${boek}**\n**Auteur**: ${auteur}\n**Beschikbaarheid**: ${status}\n`;
         });
 
-        const bookInfoString = bookList.join('\n');
-
         const maxEmbedLength = 2000;
+        const thumbnailUrl =
+            'https://scontent-bru2-1.xx.fbcdn.net/v/t39.30808-6/352234944_2153332354857911_6221230371478192896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=OGgJhWH2aK0Q7kNvgG-sndw&_nc_zt=23&_nc_ht=scontent-bru2-1.xx&_nc_gid=ALkMazRJ2iKfDtje-aOwr6K&oh=00_AYBXYazxLMu7H3Ab9d-RElX3Y6Ln3dFwrrie6NNMkE8jxA&oe=679C1EDC';
+
         let embeds = [];
         let partNumber = 1;
-        const thumbnailUrl = 'https://scontent-bru2-1.xx.fbcdn.net/v/t39.30808-6/352234944_2153332354857911_6221230371478192896_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=OGgJhWH2aK0Q7kNvgG-sndw&_nc_zt=23&_nc_ht=scontent-bru2-1.xx&_nc_gid=ALkMazRJ2iKfDtje-aOwr6K&oh=00_AYBXYazxLMu7H3Ab9d-RElX3Y6Ln3dFwrrie6NNMkE8jxA&oe=679C1EDC';
+        let remainingText = bookList.join('\n'); // Use a new variable for slicing
 
-        while (bookInfoString.length > maxEmbedLength) {
-            let part = bookInfoString.slice(0, maxEmbedLength);
-            bookInfoString = bookInfoString.slice(maxEmbedLength);
+        // Divide long text into multiple embeds
+        while (remainingText.length > maxEmbedLength) {
+            const part = remainingText.slice(0, maxEmbedLength);
+            remainingText = remainingText.slice(maxEmbedLength); // Update the variable safely
 
             embeds.push({
                 title: `Bibliotheek (Deel ${partNumber})`,
                 description: part,
                 color: 0x0099ff,
                 thumbnail: { url: thumbnailUrl },
-                footer: { text: 'Verbondsbibliotheek' },
+                footer: {
+                    text: 'Tip: Als een bepaald boek je interesseert, gebruik dan het zoek_boek commando om meer details te verkrijgen.',
+                },
             });
 
             partNumber++;
         }
 
-        if (bookInfoString.length > 0) {
+        // Add the last part if there's any remaining text
+        if (remainingText.length > 0) {
             embeds.push({
                 title: `Bibliotheek (Deel ${partNumber})`,
-                description: bookInfoString,
+                description: remainingText,
                 color: 0x0099ff,
                 thumbnail: { url: thumbnailUrl },
-                footer: { text: 'Verbondsbibliotheek' },
+                footer: {
+                    text: 'Tip: Als een bepaald boek je interesseert, gebruik dan het zoek_boek commando om meer details te verkrijgen.',
+                },
             });
         }
 
@@ -100,7 +113,6 @@ async function fetchLibraryDataCompact() {
         throw new Error('Kan data niet ophalen uit de database.');
     }
 }
-
 
 async function searchBook(criteria) {
     console.log('Searching books with criteria:', criteria);
@@ -112,24 +124,30 @@ async function searchBook(criteria) {
             status: 'Status',
             eigenaar: 'Eigenaar',
             uitgeleendAan: 'Uitgeleend aan',
-            taal: 'Taal'
+            taal: 'Taal',
+            categorie: 'Categorie', // Added Categorie mapping
         };
 
         const filters = Object.entries(criteria)
-            .filter(([_, value]) => value)
+            .filter(([_, value]) => value) // Only include criteria with values
             .map(([key, value]) => {
                 const fieldName = fieldMapping[key];
                 if (!fieldName) {
                     throw new Error(`Unknown search criterion: ${key}`);
                 }
-                return `SEARCH('${value.toLowerCase()}', LOWER({${fieldName}}))`;
-            })
-            .join(' AND ');
 
-        console.log('FilterByFormula:', filters);
+                // Escape single quotes and wrap in LOWER for case-insensitive search
+                const escapedValue = value.replace(/'/g, "\\'");
+                return `SEARCH('${escapedValue.toLowerCase()}', LOWER({${fieldName}})) > 0`;
+            });
+
+        // Combine all filters with AND, or default to a "TRUE()" filter if no criteria are provided
+        const filterByFormula = filters.length > 0 ? filters.join(' AND ') : 'TRUE()';
+
+        console.log('FilterByFormula:', filterByFormula);
 
         const records = await base('verbondsbibliotheek').select({
-            filterByFormula: filters
+            filterByFormula: filterByFormula,
         }).firstPage();
 
         if (records.length === 0) {
@@ -139,8 +157,21 @@ async function searchBook(criteria) {
         return records.map(record => {
             const fields = record.fields;
             const images = fields.Omslag || [];
-            const thumbnail = images.length > 0 ? images[0]?.url : null;
-            const mainImage = images.length > 1 ? images[1]?.url : null;
+
+            let thumbnail = null;
+            let mainImage = null;
+
+            // Determine which image(s) to use
+            if (images.length === 2) {
+                thumbnail = images[0]?.url; // Front cover
+                mainImage = images[1]?.url; // Back cover
+            } else if (images.length === 1) {
+                mainImage = images[0]?.url; // Single image used as main image
+            }
+
+            // Format Categorie and Thema
+            const categorie = fields.Categorie ? fields.Categorie.join(', ') : 'Geen';
+            const thema = fields.Thema || 'Geen'; // Restored Thema
 
             return {
                 title: fields.Boek || 'Onbekend Boek',
@@ -150,13 +181,15 @@ async function searchBook(criteria) {
                     { name: 'Status', value: fields.Status || 'Onbekend', inline: true },
                     { name: 'Eigenaar', value: fields.Eigenaar || 'Onbekend', inline: true },
                     { name: 'Uitgeleend aan', value: fields['Uitgeleend aan'] || 'Niemand', inline: true },
-                    { name: 'Taal', value: fields.Taal || 'Onbekend', inline: true }
+                    { name: 'Taal', value: fields.Taal || 'Onbekend', inline: true },
+                    { name: 'Categorie', value: categorie, inline: true },
+                    { name: 'Thema', value: thema, inline: false } // Restored Thema
                 ],
                 thumbnail: thumbnail ? { url: thumbnail } : null,
                 image: mainImage ? { url: mainImage } : null,
                 color: 0x0099ff,
                 footer: { text: 'Verbondsbibliotheek' },
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
             };
         });
     } catch (error) {
@@ -216,4 +249,25 @@ async function updateBookStatus(boek, status, uitgeleendAan = null) {
     }
 }
 
-module.exports = { addBookToAirtable, fetchLibraryDataCompact, searchBook, updateBookStatus };
+async function getCategoriesFromDatabase() {
+    try {
+        const records = await base('verbondsbibliotheek').select().all();
+        
+        // Create a set to store unique categories
+        const categories = new Set();
+
+        // Loop through all records to gather categories
+        records.forEach(record => {
+            const recordCategories = record.fields.Categorie || [];
+            recordCategories.forEach(category => categories.add(category));  // Add each category to the set
+        });
+
+        // Convert the set into an array and return it
+        return Array.from(categories);
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+        throw new Error('Kan categorieën niet ophalen uit de database.');
+    }
+}
+
+module.exports = { addBookToAirtable, fetchLibraryDataCompact, searchBook, updateBookStatus, getCategoriesFromDatabase };

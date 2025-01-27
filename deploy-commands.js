@@ -2,6 +2,7 @@ require('dotenv').config();
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const { SlashCommandBuilder } = require('discord.js');
+const { getCategoriesFromDatabase } = require('./airtable');
 
 const commands = [
     new SlashCommandBuilder()
@@ -50,6 +51,38 @@ const commands = [
     .addIntegerOption(option =>
         option.setName('aantal_bladzijden')
             .setDescription('Aantal bladzijden van het boek')
+            .setRequired(false))
+    .addStringOption(option =>
+        option.setName('categorie_1')
+            .setDescription('Categorie 1 van het boek.')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Geschiedenis', value: 'Geschiedenis' },
+                { name: 'Wijsbegeerte', value: 'Wijsbegeerte' },
+                { name: 'Politiek', value: 'Politiek' },
+                { name: 'Literatuur', value: 'Literatuur' },
+                { name: 'Sociologie', value: 'Sociologie' },
+                { name: 'Biologie', value: 'Biologie' },
+                { name: 'Fictie', value: 'Fictie' },
+                { name: 'Psychologie', value: 'Psychologie' }
+            ))
+    .addStringOption(option =>
+        option.setName('categorie_2')
+            .setDescription('Categorie 2 van het boek.')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Geschiedenis', value: 'Geschiedenis' },
+                { name: 'Wijsbegeerte', value: 'Wijsbegeerte' },
+                { name: 'Politiek', value: 'Politiek' },
+                { name: 'Literatuur', value: 'Literatuur' },
+                { name: 'Sociologie', value: 'Sociologie' },
+                { name: 'Biologie', value: 'Biologie' },
+                { name: 'Fictie', value: 'Fictie' },
+                { name: 'Psychologie', value: 'Psychologie' }
+            ))
+    .addStringOption(option =>
+        option.setName('thema')
+            .setDescription('Thema van het boek')
             .setRequired(false)),
     new SlashCommandBuilder()
         .setName('toon_bibliotheek')
@@ -84,7 +117,21 @@ const commands = [
     .addStringOption(option =>
         option.setName('taal')
             .setDescription('Taal van het boek')
-            .setRequired(false)),
+            .setRequired(false))
+    .addStringOption(option =>
+        option.setName('categorie')
+            .setDescription('Categorieën van het boek (meerdere selecties mogelijk)')
+            .setRequired(false)
+            .addChoices(
+                { name: 'Geschiedenis', value: 'Geschiedenis' },
+                { name: 'Wijsbegeerte', value: 'Wijsbegeerte' },
+                { name: 'Politiek', value: 'Politiek' },
+                { name: 'Literatuur', value: 'Literatuur' },
+                { name: 'Sociologie', value: 'Sociologie' },
+                { name: 'Biologie', value: 'Biologie' },
+                { name: 'Fictie', value: 'Fictie' },
+                { name: 'Psychologie', value: 'Psychologie' }
+            )),   
     new SlashCommandBuilder()
     .setName('update_boek_status')
     .setDescription('Werk de beschikbaarheid van een boek bij in de verbondsbibliotheek.')

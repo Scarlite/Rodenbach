@@ -34,29 +34,43 @@ client.on(Events.InteractionCreate, async interaction => {
             const frontCover = options.getString('front_cover');
             const backCover = options.getString('back_cover');
             const aantalBladzijden = options.getInteger('aantal_bladzijden');
+            const categorie1 = options.getString('categorie_1'); // First category
+            const categorie2 = options.getString('categorie_2'); // Second category
+            const thema = options.getString('thema'); // New field
+            
             // Construct Omslag array
             const omslag = [];
             if (frontCover) omslag.push({ url: frontCover });
             if (backCover) omslag.push({ url: backCover });
-
-            console.log('Boek:', boek, 'Auteur:', auteur, 'Status:', status, 'Eigenaar:', eigenaar, 'Uitgeleend aan:', uitgeleendAan, 'Beschrijving:', beschrijving, 'Taal:', taal, 'Omslag:', omslag, 'Aantal bladzijden:', aantalBladzijden);
-
+            
+            // Combine categorie1 and categorie2 into a single array if they exist
+            const categorieArray = [];
+            if (categorie1) categorieArray.push(categorie1.trim());
+            if (categorie2) categorieArray.push(categorie2.trim());
+        
+            console.log('Boek:', boek, 'Auteur:', auteur, 'Status:', status, 'Eigenaar:', eigenaar, 'Uitgeleend aan:', uitgeleendAan, 'Beschrijving:', beschrijving, 'Taal:', taal, 'Omslag:', omslag, 'Aantal bladzijden:', aantalBladzijden, 'Categorieën:', categorieArray, 'Thema:', thema);
+        
             try {
-                const response = await addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden);
+                // Defer the reply to allow time for processing
+                await interaction.deferReply();
+        
+                const response = await addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden, categorieArray, thema);
                 console.log('Airtable response:', response);
-                await interaction.reply({ content: response, ephemeral: true });  // Make it visible only to the user
+        
+                // Reply after the operation is done
+                await interaction.editReply({ content: response, flags: 64 });  // Using flags instead of ephemeral
             } catch (error) {
                 console.error('Error adding data to Airtable:', error);
-                await interaction.reply({ content: 'Kan data niet ophalen uit de database.', ephemeral: true });
+                await interaction.editReply({ content: 'Kan data niet ophalen uit de database.', flags: 64 });
             }
-        } else if (commandName === 'toon_bibliotheek') {
+        }
+        else if (commandName === 'toon_bibliotheek') {
             console.log('toon_bibliotheek command received');
             try {
                 const embeds = await fetchLibraryDataCompact();
                 if (embeds.length === 0) {
                     await interaction.reply({ content: 'De bibliotheek is leeg.', ephemeral: true });
                 } else {
-                    // Reply with the first embed and send follow-ups for others if necessary
                     await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
                     for (let i = 1; i < embeds.length; i++) {
                         await interaction.followUp({ embeds: [embeds[i]], ephemeral: true });
@@ -69,6 +83,9 @@ client.on(Events.InteractionCreate, async interaction => {
         }
         else if (commandName === 'zoek_boek') {
             console.log('zoek_boek command received');
+            
+            // Defer the interaction reply to avoid timeouts
+            await interaction.deferReply({ ephemeral: true });
         
             const boek = options.getString('boek');
             const auteur = options.getString('auteur');
@@ -76,31 +93,46 @@ client.on(Events.InteractionCreate, async interaction => {
             const eigenaar = options.getString('eigenaar');
             const uitgeleendAan = options.getString('uitgeleend_aan');
             const taal = options.getString('taal');
+            const categorie = options.getString('categorie'); // Added Categorie
         
-            console.log('Searching with parameters:', { boek, auteur, status, eigenaar, uitgeleendAan, taal });
+            console.log('Searching with parameters:', { boek, auteur, status, eigenaar, uitgeleendAan, taal, categorie });
         
             // Ensure at least one parameter is provided
-            if (!boek && !auteur && !status && !eigenaar && !uitgeleendAan && !taal) {
-                await interaction.reply({ content: 'Je moet minimaal één parameter invullen om te zoeken.', ephemeral: true });
+            if (!boek && !auteur && !status && !eigenaar && !uitgeleendAan && !taal && !categorie) {
+                await interaction.editReply({
+                    content: 'Je moet minimaal één parameter invullen om te zoeken.',
+                });
                 return;
             }
         
             try {
-                const embeds = await searchBook({ boek, auteur, status, eigenaar, uitgeleendAan, taal });
+                const embeds = await searchBook({ boek, auteur, status, eigenaar, uitgeleendAan, taal, categorie });
         
                 if (embeds.length === 0) {
-                    await interaction.reply({ content: 'Geen boeken gevonden met de opgegeven criteria.', ephemeral: true });
+                    // Update the deferred reply with a message if no books are found
+                    await interaction.editReply({
+                        content: 'Geen boeken gevonden met de opgegeven criteria.',
+                    });
                 } else {
-                    await interaction.reply({ content: 'Hier zijn de gevonden boeken:', ephemeral: true });
+                    // Edit the deferred reply with a summary message
+                    await interaction.editReply({
+                        content: 'Hier zijn de gevonden boeken:',
+                    });
+        
+                    // Follow up with additional embeds for each book
                     for (const embed of embeds) {
                         await interaction.followUp({ embeds: [embed], ephemeral: true });
                     }
                 }
             } catch (error) {
                 console.error('Error searching for book:', error);
-                await interaction.reply({ content: 'Er is een fout opgetreden bij het zoeken naar boeken.', ephemeral: true });
+        
+                // Update the deferred reply with an error message
+                await interaction.editReply({
+                    content: 'Er is een fout opgetreden bij het zoeken naar boeken.',
+                });
             }
-        }
+        }                 
         else if (commandName === 'update_boek_status') {
             try {
                 console.log('Received update_book_status command');
@@ -134,19 +166,19 @@ client.on(Events.InteractionCreate, async interaction => {
                 fields: [
                     {
                         name: '/boek_toevoegen',
-                        value: 'Voeg een nieuw boek toe aan de verbondsbibliotheek. Je kunt details zoals de titel, auteur, status en eigenaar invullen.',
+                        value: 'Voeg een nieuw boek toe aan de verbondsbibliotheek. boek, auteur, status en eigenaar zijn vereiste parameters. De anderen zijn optioneel.',
                     },
                     {
                         name: '/toon_bibliotheek',
-                        value: 'Toon een lijst van alle boeken in de verbondsbibliotheek.',
+                        value: 'Toon een lijst van alle boeken in de verbondsbibliotheek. Als een bepaald boek je interesseert kan je de details opzoeken met /zoek_boek.',
                     },
                     {
                         name: '/zoek_boek',
-                        value: 'Zoek een boek op basis van verschillende filters zoals titel, auteur, status en meer.',
+                        value: 'Zoek een boek op basis van verschillende filters zoals titel, auteur, status en meer. Je kan ook zoeken op sleutelwoorden. Je hoeft hier dus niet de volledige titel ingeven.',
                     },
                     {
                         name: '/update_boek_status',
-                        value: 'Werk de status van een boek bij. Je kunt het boek als "Beschikbaar" of "Uitgeleend" markeren.',
+                        value: 'Werk de status van een boek bij. Je kunt het boek als "Beschikbaar" of "Uitgeleend" markeren. Vul steeds het uitgeleend_aan parameter in als je de status veranderd naar "uitgeleend".',
                     },
                     {
                         name: '/help',
@@ -154,7 +186,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     },
                 ],
                 footer: {
-                    text: 'Voor hulp met specifieke commando\'s, gebruik /help [commando]',
+                    text: 'Voor meer hulp, stel je vraag aan Opinel.',
                 },
             };
 
