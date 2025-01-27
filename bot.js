@@ -109,19 +109,15 @@ client.on(Events.InteractionCreate, async interaction => {
                 const status = options.getString('status');
                 const uitgeleendAan = options.getString('uitgeleend_aan');
         
-                // Defer the reply to give Discord more time
                 await interaction.deferReply({ ephemeral: true });
         
-                // If status is 'Uitgeleend', check if 'uitgeleend_aan' is provided
                 if (status === 'Uitgeleend' && !uitgeleendAan) {
                     await interaction.editReply({ content: 'Voor de status "Uitgeleend" moet je opgeven aan wie het boek is uitgeleend.', ephemeral: true });
                     return;
                 }
         
-                // Call the update function for the book's status
                 const response = await updateBookStatus(boek, status, uitgeleendAan);
                 
-                // Send the success message back
                 await interaction.editReply({ content: response, ephemeral: true });
             } catch (error) {
                 console.error('Error handling update_book_status command:', error);
@@ -131,7 +127,6 @@ client.on(Events.InteractionCreate, async interaction => {
         else  if (commandName === 'help') {
             console.log('help command received');
             
-            // Create an embed message with a list of available commands and their descriptions
             const helpEmbed = {
                 color: 0x0099ff,
                 title: 'Beschikbare Commando\'s',
