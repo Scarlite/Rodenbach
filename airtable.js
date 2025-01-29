@@ -152,6 +152,7 @@ async function searchBook(criteria) {
             taal: 'Taal',
             categorie: 'Categorie',
             aantalBladzijden: 'Aantal bladzijden',
+            download: 'Download'
         };
 
         const filters = Object.entries(criteria)
@@ -207,19 +208,23 @@ async function searchBook(criteria) {
             const status = fields.Status || 'Onbekend';
             const uitgeleendAan = fields['Uitgeleend aan'] || 'Niemand';
 
+            const downloadUrl = fields.Download && fields.Download[0] ? fields.Download[0].url : null;
+
             const embedFields = [
                 { name: 'Auteur', value: fields.Auteur || 'Onbekend', inline: true },
                 { name: 'Status', value: status, inline: true },
+                { name: 'Uitgeleend aan', value: fields.uitgeleendAan || 'Niemand', inline: true },
                 { name: 'Eigenaar', value: fields.Eigenaar || 'Onbekend', inline: true },
                 { name: 'Taal', value: fields.Taal || 'Onbekend', inline: true },
                 { name: 'Categorie', value: categorie, inline: true },
                 { name: 'Thema', value: thema, inline: true },
                 { name: 'Aantal bladzijden', value: aantalBladzijden, inline: true },
+                { 
+                    name: 'Download', 
+                    value: downloadUrl ? `[Link](${downloadUrl})` : 'Niet beschikbaar', 
+                    inline: true 
+                }
             ];
-
-            if (status !== 'Beschikbaar') {
-                embedFields.push({ name: 'Uitgeleend aan', value: uitgeleendAan, inline: true });
-            }
 
             return {
                 title: fields.Boek || 'Onbekend Boek',
@@ -237,6 +242,7 @@ async function searchBook(criteria) {
         throw new Error('Kan data niet ophalen uit de database.');
     }
 }
+
 
 async function updateBookStatus(boek, status, uitgeleendAan = null) {
     console.log('updateBookStatus called with:', { boek, status, uitgeleendAan });
