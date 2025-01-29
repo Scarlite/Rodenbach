@@ -54,12 +54,38 @@ async function addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, 
     }
 }
 
-async function fetchLibraryDataCompact() {
+async function fetchLibraryDataCompact(categorie = null, taal = null, auteur = null) {
     try {
         const records = await base('verbondsbibliotheek').select().all();
 
+        // Normalize input parameters for case-insensitive comparison
+        const lowerCategorie = categorie ? categorie.toLowerCase() : null;
+        const lowerTaal = taal ? taal.toLowerCase() : null;
+        const lowerAuteur = auteur ? auteur.toLowerCase() : null;
+
+        // Filter records based on the provided parameters
+        const filteredRecords = records.filter(record => {
+            const fields = record.fields;
+            const boekCategorie = fields.Categorie 
+                ? (Array.isArray(fields.Categorie) 
+                    ? fields.Categorie.join(', ').toLowerCase() 
+                    : String(fields.Categorie).toLowerCase()) 
+                : '';
+
+            const boekTaal = fields.Taal ? String(fields.Taal).toLowerCase() : '';
+            const boekAuteur = fields.Auteur ? String(fields.Auteur).toLowerCase() : '';
+
+            const matchesCategorie = !lowerCategorie || boekCategorie.includes(lowerCategorie);
+            const matchesTaal = !lowerTaal || boekTaal === lowerTaal;
+            const matchesAuteur = !lowerAuteur || boekAuteur.includes(lowerAuteur); // Partial match support
+
+            return matchesCategorie && matchesTaal && matchesAuteur;
+        });
+
+        console.log(`Found ${filteredRecords.length} matching books.`);
+
         // Create book information list
-        const bookList = records.map(record => {
+        const bookList = filteredRecords.map(record => {
             const fields = record.fields;
             const boek = fields.Boek || 'Onbekend Boek';
             const auteur = fields.Auteur || 'Onbekende Auteur';
@@ -74,12 +100,12 @@ async function fetchLibraryDataCompact() {
 
         let embeds = [];
         let partNumber = 1;
-        let remainingText = bookList.join('\n'); // Use a new variable for slicing
+        let remainingText = bookList.join('\n');
 
         // Divide long text into multiple embeds
         while (remainingText.length > maxEmbedLength) {
             const part = remainingText.slice(0, maxEmbedLength);
-            remainingText = remainingText.slice(maxEmbedLength); // Update the variable safely
+            remainingText = remainingText.slice(maxEmbedLength);
 
             embeds.push({
                 title: `Bibliotheek (Deel ${partNumber})`,
@@ -114,6 +140,7 @@ async function fetchLibraryDataCompact() {
     }
 }
 
+
 async function searchBook(criteria) {
     console.log('Searching books with criteria:', criteria);
 
@@ -129,20 +156,23 @@ async function searchBook(criteria) {
         };
 
         const filters = Object.entries(criteria)
-            .filter(([_, value]) => value) // Only include criteria with values
+            .filter(([_, value]) => value) // Ignore empty filters
             .map(([key, value]) => {
                 const fieldName = fieldMapping[key];
-                if (!fieldName) {
-                    throw new Error(`Unknown search criterion: ${key}`);
+                if (!fieldName) throw new Error(`Unknown search criterion: ${key}`);
+
+                const escapedValue = value.replace(/'/g, "\\'");
+
+                // Special handling for Categorie (convert array to a string)
+                if (key === "categorie") {
+                    return `SEARCH('${escapedValue.toLowerCase()}', LOWER(ARRAYJOIN({${fieldName}}, ', '))) > 0`;
                 }
 
-                // Escape single quotes and wrap in LOWER for case-insensitive search
-                const escapedValue = value.replace(/'/g, "\\'");
                 return `SEARCH('${escapedValue.toLowerCase()}', LOWER({${fieldName}})) > 0`;
             });
 
-        // Combine all filters with AND, or default to a "TRUE()" filter if no criteria are provided
-        const filterByFormula = filters.length > 0 ? filters.join(' AND ') : 'TRUE()';
+        const filterByFormula = filters.length > 0 ? `AND(${filters.join(', ')})` : 'TRUE()';
+
 
         console.log('FilterByFormula:', filterByFormula);
 
@@ -249,25 +279,4 @@ async function updateBookStatus(boek, status, uitgeleendAan = null) {
     }
 }
 
-async function getCategoriesFromDatabase() {
-    try {
-        const records = await base('verbondsbibliotheek').select().all();
-        
-        // Create a set to store unique categories
-        const categories = new Set();
-
-        // Loop through all records to gather categories
-        records.forEach(record => {
-            const recordCategories = record.fields.Categorie || [];
-            recordCategories.forEach(category => categories.add(category));  // Add each category to the set
-        });
-
-        // Convert the set into an array and return it
-        return Array.from(categories);
-    } catch (error) {
-        console.error('Error fetching categories:', error);
-        throw new Error('Kan categorieën niet ophalen uit de database.');
-    }
-}
-
-module.exports = { addBookToAirtable, fetchLibraryDataCompact, searchBook, updateBookStatus, getCategoriesFromDatabase };
+module.exports = { addBookToAirtable, fetchLibraryDataCompact, searchBook, updateBookStatus };

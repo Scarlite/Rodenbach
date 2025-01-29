@@ -2,7 +2,6 @@ require('dotenv').config();
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const { SlashCommandBuilder } = require('discord.js');
-const { getCategoriesFromDatabase } = require('./airtable');
 
 const commands = [
     new SlashCommandBuilder()
@@ -84,12 +83,34 @@ const commands = [
         option.setName('thema')
             .setDescription('Thema van het boek')
             .setRequired(false)),
-    new SlashCommandBuilder()
-        .setName('toon_bibliotheek')
-        .setDescription('Toon de gehele verbondsbibliotheek'),
+            new SlashCommandBuilder()
+            .setName('toon_bibliotheek')
+            .setDescription('Doorzoek de hele verbondsbibliotheek. Geef optioneel auteur, categorie en taal mee. Geef het commando in zonder parameters om alle boeken te laten zien.')
+            .addStringOption(option =>
+                option.setName('auteur')
+                    .setDescription('Auteur van het boek')
+                    .setRequired(false))
+            .addStringOption(option =>
+                option.setName('categorie')
+                    .setDescription('Filter op categorie')
+                    .setRequired(false)
+                    .addChoices(
+                        { name: 'Geschiedenis', value: 'Geschiedenis' },
+                        { name: 'Wijsbegeerte', value: 'Wijsbegeerte' },
+                        { name: 'Politiek', value: 'Politiek' },
+                        { name: 'Literatuur', value: 'Literatuur' },
+                        { name: 'Sociologie', value: 'Sociologie' },
+                        { name: 'Biologie', value: 'Biologie' },
+                        { name: 'Fictie', value: 'Fictie' },
+                        { name: 'Psychologie', value: 'Psychologie' }
+                    ))
+            .addStringOption(option =>
+                option.setName('taal')
+                    .setDescription('Filter op taal')
+                    .setRequired(false)),        
     new SlashCommandBuilder()
     .setName('zoek_boek')
-    .setDescription('Zoek een boek met specifieke eigenschappen in de verbondsbibliotheek.')
+    .setDescription('Bekijk de details van een boek in de bibliotheek.')
     .addStringOption(option =>
         option.setName('boek')
             .setDescription('Naam van het boek')

@@ -67,9 +67,14 @@ client.on(Events.InteractionCreate, async interaction => {
         else if (commandName === 'toon_bibliotheek') {
             console.log('toon_bibliotheek command received');
             try {
-                const embeds = await fetchLibraryDataCompact();
+                const categorie = interaction.options.getString('categorie') || null;
+                const taal = interaction.options.getString('taal') || null;
+                const auteur = interaction.options.getString('auteur') || null; // NEW: Fetch author parameter
+        
+                const embeds = await fetchLibraryDataCompact(categorie, taal, auteur); // Pass 'auteur' to function
+        
                 if (embeds.length === 0) {
-                    await interaction.reply({ content: 'De bibliotheek is leeg.', ephemeral: true });
+                    await interaction.reply({ content: 'Geen boeken gevonden met de opgegeven filters.', ephemeral: true });
                 } else {
                     await interaction.reply({ embeds: [embeds[0]], ephemeral: true });
                     for (let i = 1; i < embeds.length; i++) {
@@ -80,7 +85,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 console.error('Error fetching data from Airtable:', error);
                 await interaction.reply({ content: 'Kan data niet ophalen uit de database.', ephemeral: true });
             }
-        }
+        }        
         else if (commandName === 'zoek_boek') {
             console.log('zoek_boek command received');
             
@@ -170,11 +175,11 @@ client.on(Events.InteractionCreate, async interaction => {
                     },
                     {
                         name: '/toon_bibliotheek',
-                        value: 'Toon een lijst van alle boeken in de verbondsbibliotheek. Als een bepaald boek je interesseert kan je de details opzoeken met /zoek_boek.',
+                        value: 'Doorzoek het aanbod van de verbondsbibliotheek. Je kan hier drie optionele parameters (inclusief sleutelwoorden) meegeven om de zoekopdracht specifieker te maken. Je kan het commando ingeven zonder parameters om heel de bibliotheek te laten zien. Als een bepaald boek je interesseert kan je de details opzoeken met /zoek_boek.',
                     },
                     {
                         name: '/zoek_boek',
-                        value: 'Zoek een boek op basis van verschillende filters zoals titel, auteur, status en meer. Je kan ook zoeken op sleutelwoorden. Je hoeft hier dus niet de volledige titel ingeven.',
+                        value: 'Zoek de details van een boek op doormiddel van verschillende filters zoals titel, auteur, status en meer. Je kan ook zoeken op sleutelwoorden. Je hoeft hier dus niet de volledige titel ingeven.',
                     },
                     {
                         name: '/update_boek_status',
