@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Events } = require('discord.js');
-const { addBookToAirtable, fetchLibraryDataCompact, searchBook, updateBookStatus } = require('./airtable');
+const { addBook, fetchLibrary, searchBook, updateBookStatus } = require('./airtable');
 
 const client = new Client({
     intents: [
@@ -34,16 +34,14 @@ client.on(Events.InteractionCreate, async interaction => {
             const frontCover = options.getString('front_cover');
             const backCover = options.getString('back_cover');
             const aantalBladzijden = options.getInteger('aantal_bladzijden');
-            const categorie1 = options.getString('categorie_1'); // First category
-            const categorie2 = options.getString('categorie_2'); // Second category
-            const thema = options.getString('thema'); // New field
+            const categorie1 = options.getString('categorie_1');
+            const categorie2 = options.getString('categorie_2');
+            const thema = options.getString('thema');
             
-            // Construct Omslag array
             const omslag = [];
             if (frontCover) omslag.push({ url: frontCover });
             if (backCover) omslag.push({ url: backCover });
             
-            // Combine categorie1 and categorie2 into a single array if they exist
             const categorieArray = [];
             if (categorie1) categorieArray.push(categorie1.trim());
             if (categorie2) categorieArray.push(categorie2.trim());
@@ -51,14 +49,12 @@ client.on(Events.InteractionCreate, async interaction => {
             console.log('Boek:', boek, 'Auteur:', auteur, 'Status:', status, 'Eigenaar:', eigenaar, 'Uitgeleend aan:', uitgeleendAan, 'Beschrijving:', beschrijving, 'Taal:', taal, 'Omslag:', omslag, 'Aantal bladzijden:', aantalBladzijden, 'Categorieën:', categorieArray, 'Thema:', thema);
         
             try {
-                // Defer the reply to allow time for processing
                 await interaction.deferReply();
         
-                const response = await addBookToAirtable(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden, categorieArray, thema);
+                const response = await addBook(boek, auteur, status, eigenaar, uitgeleendAan, beschrijving, taal, frontCover, backCover, aantalBladzijden, categorieArray, thema);
                 console.log('Airtable response:', response);
         
-                // Reply after the operation is done
-                await interaction.editReply({ content: response, flags: 64 });  // Using flags instead of ephemeral
+                await interaction.editReply({ content: response, flags: 64 });
             } catch (error) {
                 console.error('Error adding data to Airtable:', error);
                 await interaction.editReply({ content: 'Kan data niet ophalen uit de database.', flags: 64 });
@@ -69,9 +65,9 @@ client.on(Events.InteractionCreate, async interaction => {
             try {
                 const categorie = interaction.options.getString('categorie') || null;
                 const taal = interaction.options.getString('taal') || null;
-                const auteur = interaction.options.getString('auteur') || null; // NEW: Fetch author parameter
+                const auteur = interaction.options.getString('auteur') || null;
         
-                const embeds = await fetchLibraryDataCompact(categorie, taal, auteur); // Pass 'auteur' to function
+                const embeds = await fetchLibrary(categorie, taal, auteur);
         
                 if (embeds.length === 0) {
                     await interaction.reply({ content: 'Geen boeken gevonden met de opgegeven filters.', ephemeral: true });
@@ -88,8 +84,6 @@ client.on(Events.InteractionCreate, async interaction => {
         }        
         else if (commandName === 'zoek_boek') {
             console.log('zoek_boek command received');
-            
-            // Defer the interaction reply to avoid timeouts
             await interaction.deferReply({ ephemeral: true });
         
             const boek = options.getString('boek');
@@ -98,11 +92,10 @@ client.on(Events.InteractionCreate, async interaction => {
             const eigenaar = options.getString('eigenaar');
             const uitgeleendAan = options.getString('uitgeleend_aan');
             const taal = options.getString('taal');
-            const categorie = options.getString('categorie'); // Added Categorie
+            const categorie = options.getString('categorie');
         
             console.log('Searching with parameters:', { boek, auteur, status, eigenaar, uitgeleendAan, taal, categorie });
         
-            // Ensure at least one parameter is provided
             if (!boek && !auteur && !status && !eigenaar && !uitgeleendAan && !taal && !categorie) {
                 await interaction.editReply({
                     content: 'Je moet minimaal één parameter invullen om te zoeken.',
@@ -114,25 +107,20 @@ client.on(Events.InteractionCreate, async interaction => {
                 const embeds = await searchBook({ boek, auteur, status, eigenaar, uitgeleendAan, taal, categorie });
         
                 if (embeds.length === 0) {
-                    // Update the deferred reply with a message if no books are found
                     await interaction.editReply({
                         content: 'Geen boeken gevonden met de opgegeven criteria.',
                     });
                 } else {
-                    // Edit the deferred reply with a summary message
                     await interaction.editReply({
                         content: 'Hier zijn de gevonden boeken:',
                     });
-        
-                    // Follow up with additional embeds for each book
+    
                     for (const embed of embeds) {
                         await interaction.followUp({ embeds: [embed], ephemeral: true });
                     }
                 }
             } catch (error) {
                 console.error('Error searching for book:', error);
-        
-                // Update the deferred reply with an error message
                 await interaction.editReply({
                     content: 'Er is een fout opgetreden bij het zoeken naar boeken.',
                 });
